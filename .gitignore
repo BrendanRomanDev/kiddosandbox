@@ -2,5 +2,8 @@
 .godot/
 /android/
 
+# Nano Banana staging (raw AI output, not QA'd)
+nanobanana-output/
+
 # macOS
 .DS_Store
