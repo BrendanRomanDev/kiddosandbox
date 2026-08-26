@@ -1,8 +1,8 @@
 ---
 title: Character Animation Specification
 status: pre-mvp
-base_sprite: nanobanana-output/nanobanana-output/spy_dad_labcoat_base.png
-sprite_size: 64x64
+base_sprite: assets/sprites/characters/brendo/base_greenscreen.png
+sprite_size: 32x32
 ---
 
 # Character Animation Specification
@@ -13,114 +13,160 @@ sprite_size: 64x64
 
 **Visual tone:** Charming and cohesive. Doesn't take itself seriously, but earns aesthetic respect. Think Dexter's Laboratory meets Rick and Morty portal vibes. Characters should feel expressive even at small pixel scale.
 
+## Design Philosophy: Prototype-First Simplicity
+
+The character art is intentionally minimal. At 32x32, a character is roughly 14-18 pixels tall — hair is a color blob, glasses are 2 dark pixels, the coat is a flat color block, legs are pixel stumps. This is a deliberate stylistic choice inspired by Enter the Gungeon's character sprites (see `docs/Example Sprite Sheet Pilot ETG.png` for reference).
+
+**Why this simple:**
+1. AI image generation produces more consistent frame-to-frame results at low detail
+2. Minor variations between frames read as bouncy animation, not errors
+3. Drastically fewer frames needed — MVP ships faster
+4. Art can be upgraded later without changing game architecture
+5. At bullet-hell scale (zoomed out, lots of projectiles), players don't notice fine detail
+
+**Hands/arms policy for MVP:** At 32x32, hands would be 1-2 pixels. They can exist or not — it barely matters visually. The armless architecture is still the right call for the node tree (weapon pivot handles aiming independently), but don't stress about whether a generated frame shows a pixel bump where an arm might be.
+
+## Sprite Architecture
+
+Characters use a **layered node approach** — NOT a single unified sprite:
+
+```
+CharacterBody2D
+├── BodySprite (AnimatedSprite2D)     # body+head
+│   └── animations: idle_S, run_S, dodge_S, etc.
+├── WeaponPivot (Node2D)              # positioned at chest, rotates to aim
+│   ├── WeaponSprite (Sprite2D)       # the weapon itself
+│   └── Hand (Sprite2D or draw)       # small circle on grip (optional at 32x32)
+└── CollisionShape2D
+```
+
+**Key rules:**
+- **Body sprites are the full character silhouette** — head, torso, legs. At 32x32, arms are optional visual noise.
+- **Hands are floating circles** — either `draw_circle()` in code or a tiny PNG. At 32x32 scale, a single pixel suffices.
+- **Hands are children of the weapon pivot**, not the body. They rotate/move with the weapon automatically.
+- **Recoil is code-driven** (tween on WeaponPivot), not animated in the sprite sheet.
+
 ## Standard Prompt Preamble
 
-When generating ANY sprite or animation frame for this project via Nano Banana, **always include this preamble** at the start of the prompt to ensure stylistic consistency:
+When generating ANY sprite or animation frame for this project via Nano Banana, **always include this preamble** at the start of the prompt:
 
 ```
-Style: Chibi pixel art character for a top-down co-op bullet-hell game.
-Resolution: 64x64 pixels per frame.
-Palette: Warm muted tones — browns, tans, warm grays, white lab coat. Match the
-reference sprite exactly. No new colors outside the established palette.
-Perspective: 3/4 top-down view (same as reference sprite).
-Outline: Dark pixel outline, 1px, consistent with reference.
-Background: Transparent (or solid green #00FF00 for chroma key removal).
-Character proportions: Oversized head (~40% of height), compact body, stubby limbs.
-Tone: Cute, charming, expressive. Kid-friendly sci-fi scientist aesthetic.
-Reference sprite: [attach nanobanana-output/nanobanana-output/spy_dad_labcoat_base.png]
+Style: Ultra-simple chibi pixel art character for a top-down co-op bullet-hell game.
+Inspired by Enter the Gungeon character sprites — chunky, minimal, readable.
+Resolution: 32x32 pixels per frame. Character should be roughly 14-18 pixels tall.
+Palette: Minimal — brown hair blob, skin-tone face, dark glasses (2px), tan/brown coat, dark legs. 4-6 colors max.
+Perspective: 3/4 top-down view.
+Detail level: VERY LOW. Hair is a solid color shape. No individual strands. Glasses are 2 dark pixels. Coat is a flat color block. Legs are pixel stumps.
+Outline: 1px dark outline. Keep it chunky and readable.
+Background: Solid bright green #00FF00 filling entire image.
+Tone: Cute, charming. Kid-friendly sci-fi scientist.
+Reference sprite: [attach base_greenscreen.png]
+Reference style: [attach Example Sprite Sheet Pilot ETG.png]
 ```
 
-## Standard Animation Prompt Template
+## Animation Frame Generation Strategy
 
-When generating animation frames, use this template per animation:
+At 32x32 with minimal detail, frame generation is straightforward:
 
-```
-[STANDARD PROMPT PREAMBLE above]
+**For all animations:**
+- Generate each frame by editing the base sprite with clear pose instructions
+- At this detail level, style drift between frames is minimal — a few pixels shifting IS the animation
+- Don't overthink consistency — embrace the slight variation as charm
 
-Generate a {FRAME_COUNT}-frame animation strip for: {ANIMATION_NAME}
-Direction: {DIRECTION} (N/NE/E/SE/S/SW/W/NW or front-facing)
-Action description: {ACTION_DESCRIPTION}
+**Loop continuity:** For looping animations, the final frame must transition smoothly back to frame 1. Include in the prompt: "This is frame N of N — returning to the same position as frame 1."
 
-Layout: Horizontal strip, {FRAME_COUNT} frames side by side, each frame 64x64 pixels.
-Total image size: {FRAME_COUNT * 64}x64 pixels.
+## Animation Action Descriptions
 
-The character should be clearly performing the described action with smooth frame
-transitions. Each frame should be distinct but flow naturally into the next.
-Maintain consistent proportions, palette, and outline style across all frames.
-```
-
-### Animation Action Descriptions
-
-Use these descriptions in the `{ACTION_DESCRIPTION}` field to ensure consistent interpretation across all generation sessions:
+Use these descriptions in prompts to ensure consistent interpretation:
 
 | Animation | Action Description |
 |-----------|-------------------|
-| **idle** | "Scientist standing relaxed. Subtle bounce or breathing motion — slight vertical shift of the body. Arms at sides. Expressive but minimal movement. The character looks alert and ready." |
-| **run** | "Scientist running with urgency. Clear leg movement alternating steps. Arms pump naturally. Lab coat flaps slightly with movement. Head bobs subtly. Should convey speed and energy at chibi scale." |
-| **dodge_roll** | "Scientist tucking into a fast combat roll. Frame 1: crouch and lean. Frames 2-4: body curled mid-roll, rotating. Frame 5: coming out of roll. Frame 6: back to ready stance. Should feel snappy and athletic." |
-| **shoot** | "Scientist in shooting stance, arms extended forward as if firing (but NO weapon in hands — weapon is overlaid separately). Frame 1: aim pose. Frame 2: recoil — slight backward lean, arms kick up. Frame 3: return to aim. Quick and punchy." |
-| **death** | "Scientist dramatically defeated. Frame 1-2: hit reaction, stagger backward. Frame 3-4: spin with arms out. Frame 5-6: falling. Frame 7-8: collapsed on ground in silly/dramatic pose. Should be funny and theatrical, not sad or violent. A kid should laugh at this." |
-| **ghost** | "Scientist as a translucent ghost — same character but faded/ethereal. Floating slightly above ground. Gentle bobbing up and down. Maybe a slight shimmer or transparency effect. Friendly ghost, not scary." |
-| **item_pickup** | "Scientist triumphantly holding an item above their head with both hands. Frame 1: reach down. Frame 2: grab. Frame 3: lift overhead. Frame 4: hold pose with slight celebratory bounce. Classic Zelda treasure chest moment." |
+| **idle** | "Tiny pixel scientist standing relaxed. Subtle 1-2 pixel vertical bob — body shifts up/down slightly. Legs planted. Minimal movement, just enough to feel alive." |
+| **run** | "Tiny pixel scientist running. Legs alternate (2-pixel stumps swapping). Body leans slightly forward. Simple and readable at 32x32." |
+| **dodge_roll** | "Tiny pixel scientist doing a quick roll. Body tucks into a ball shape, rotates, then pops back up. Should feel snappy — biggest pose change of any animation." |
 
 ## Base Character
 
-- **Sprite:** `nanobanana-output/nanobanana-output/spy_dad_labcoat_base.png` (white lab coat scientist)
-- **Size:** ~64x64 pixels per frame
-- **Style:** Chibi pixel art, oversized head, compact body
-- **Palette:** Warm muted tones — match existing base sprite exactly
+- **Sprite:** `assets/sprites/characters/brendo/base_greenscreen.png` (to be regenerated at 32x32)
+- **Promoted:** `assets/sprites/characters/brendo/base.png` (transparent)
+- **Size:** 32x32 pixels per frame
+- **Style:** Ultra-simple chibi pixel art, Enter the Gungeon level of detail
+- **Palette:** 4-6 colors — brown hair, skin tone, dark glasses, tan coat, dark pants, dark outline
 
-## Required Animations
+## MVP Animations
 
-### 8-Directional Animations
+### South-Only for MVP
 
-These need frames for all 8 directions: N, NE, E, SE, S, SW, W, NW
+Start with south-facing only. Expand to 4-directional or 8-directional after mechanics are working.
 
-| Animation | Frames | Description |
-|-----------|--------|-------------|
-| **idle** | 4 | Subtle breathing/bounce. Character standing still. |
-| **run** | 6 | Clear leg movement visible at chibi scale. |
-| **dodge_roll** | 6 | Tuck body and roll. Should feel snappy. i-frame window should match middle frames. |
-| **shoot** | 3 | Body recoil pose. NO gun in hand — weapon is a separate sprite layered on top so weapons can be swapped visually. |
+| Animation | Frames | FPS | Loop | Description |
+|-----------|--------|-----|------|-------------|
+| **idle** | 2-3 | 6 | Yes | Subtle vertical bob. |
+| **run** | 3 | 8 | Yes | Leg alternation, slight lean. |
+| **dodge_roll** | 4-5 | 12 | No | Tuck, roll, pop up. |
 
-### Non-Directional Animations
+### Future Animations (Post-MVP)
 
-These only need a single direction (front-facing unless noted).
+These are parked for later. Don't generate these yet.
 
-| Animation | Frames | Direction | Description |
-|-----------|--------|-----------|-------------|
-| **death** | 8 | Front-facing | Dramatic and fun — stumble, spin, collapse. Should make a kid laugh, not feel sad. |
-| **ghost** | 4 | Front-facing | Translucent/floaty idle for dead co-op player. Used when partner is still fighting. |
-| **item_pickup** | 4 | Front-facing | Hold item above head, Zelda chest style. Celebratory pose. |
+| Animation | Frames | FPS | Loop | Notes |
+|-----------|--------|-----|------|-------|
+| **death** | 4-6 | 8 | No | Theatrical collapse. Funny, not sad. |
+| **ghost** | 2-3 | 6 | Yes | Translucent floaty idle for dead co-op player. |
+| **item_pickup** | 3 | 8 | No | Celebratory bounce. |
+
+### Removed from body animations
+
+| Animation | Why | Where it lives instead |
+|-----------|-----|----------------------|
+| **shoot** | Body doesn't animate for shooting — recoil is on WeaponPivot via tween | Code (tween on WeaponPivot node) |
+
+## Directional Expansion Plan (Post-MVP)
+
+When ready to add directions, generate 5 and mirror 3:
+
+| Generate | Mirror to get |
+|----------|--------------|
+| S | — |
+| E | W (flip horizontal) |
+| N | — |
+| NE | NW (flip horizontal) |
+| SE | SW (flip horizontal) |
+
+Mirror via `flip_h` at runtime in Godot or `magick sheet_E.png -flop sheet_W.png`.
+
+## MVP Frame Totals
+
+| Animation | Directions | Frames | Total |
+|-----------|-----------|--------|-------|
+| idle | 1 (S) | 2-3 | 3 |
+| run | 1 (S) | 3 | 3 |
+| dodge_roll | 1 (S) | 4-5 | 5 |
+| **Total** | — | — | **~11** |
+
+(Down from ~96 in the previous spec. Upgradeable anytime.)
 
 ## Sprite Sheet Format
 
 - **Layout:** Horizontal strip per animation per direction
-- **Naming convention:** `{character}_{animation}_{direction}.png`
-  - Example: `scientist_idle_N.png`, `scientist_run_SE.png`, `scientist_death.png`
-- **Or combined:** One sheet per animation with all directions as rows
-  - Row order: N, NE, E, SE, S, SW, W, NW (top to bottom)
-
-## Frame Totals
-
-| Category | Animations | Directions | Frames Each | Total Frames |
-|----------|-----------|------------|-------------|--------------|
-| 8-dir | 4 | 8 | 3-6 | ~152 |
-| Non-dir | 3 | 1 | 4-8 | ~16 |
-| **Total** | **7** | — | — | **~168** |
+- **Naming:** `{character}_{animation}_{direction}.png`
+  - Example: `brendo_idle_S.png`, `brendo_run_S.png`, `brendo_dodge_roll_S.png`
+- **Background removal:** 3-step chroma pipeline (key → despill → black snap) on every frame
 
 ## Art Rules
 
-- All frames must be the same pixel resolution as the base sprite (~64x64)
-- Color palette must match the base sprite exactly — no new colors
-- Transparent background on all frames
-- Weapon is NEVER part of the character sprite — it's a separate overlay
-- Outlines and shading style must match the base sprite
-- When generating with Nano Banana, always reference the base sprite as the style anchor
+- All frames: 32x32 resolution
+- 4-6 color palette per character — keep it dead simple
+- Solid green #00FF00 background during generation (chroma keyed after)
+- 1px dark outline, chunky and readable
+- Always reference the base sprite AND the ETG reference for style consistency
+- Embrace imperfection — at this scale, slight frame variation is animation
 
 ## Notes
 
-- This spec covers the first playable character (Dad/Scientist in white lab coat)
+- This spec covers the first playable character (Brendo / Dad)
 - Wesley's character will use the same animation set with a different base sprite
-- Boss animations are a separate spec (TBD — modular parts have their own animation needs)
-- Additional animations may be added later (melee attack, interact, emotes) but these 7 cover pre-MVP
+- Boss animations are a separate spec (TBD — modular parts)
+- Weapon+hand sprites are a separate spec (TBD)
+- Art can be upgraded to higher fidelity later without changing game architecture
+- The previous 64x64 detailed sprites are preserved in git history if needed

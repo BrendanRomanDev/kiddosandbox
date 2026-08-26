@@ -1,7 +1,8 @@
 ---
 title: Double Twice Art Bible
 status: pre-mvp
-style_anchor: nanobanana-output/nanobanana-output/spy_dad_labcoat_base.png
+style_anchor: assets/sprites/characters/brendo/base_greenscreen.png
+style_reference: docs/Example Sprite Sheet Pilot ETG.png
 ---
 
 # Double Twice — Art Bible
@@ -12,33 +13,36 @@ This document is the single source of truth for all visual asset creation in Dou
 
 ## Style Overview
 
-**Style:** Chibi pixel art
+**Style:** Ultra-simple chibi pixel art — Enter the Gungeon level of detail or simpler
 **Perspective:** 3/4 top-down (slight overhead angle, character faces camera at ~30° tilt)
-**Tone:** Charming, expressive, kid-friendly. Enter the Gungeon's cohesive pixel craft meets Castle Crashers' personality. Not overly detailed — clarity and readability at small scale are paramount.
+**Tone:** Charming, expressive, kid-friendly. Enter the Gungeon's cohesive pixel craft meets Castle Crashers' personality. Intentionally minimal — clarity and readability at small scale are paramount. Detail is sacrificed for consistency and speed.
 
-**Style Anchor:** `nanobanana-output/nanobanana-output/spy_dad_labcoat_base.png`
-All assets must look like they belong in the same game as this sprite.
+**Style Anchor:** `assets/sprites/characters/brendo/base_greenscreen.png`
+**Style Reference:** `docs/Example Sprite Sheet Pilot ETG.png` (Enter the Gungeon pilot sprite sheet)
+All assets must look like they belong in the same game as these references. When in doubt, go simpler.
 
 ---
 
 ## Pixel Resolution Standards
 
+MVP resolution is deliberately small to keep art generation simple and consistent. Can be upgraded later.
+
 | Asset Type | Resolution | Notes |
 |-----------|-----------|-------|
-| Player characters | 64x64 | Chibi proportions, ~40% head |
-| Boss parts (head) | 48x48 | Must compose with torso/legs |
-| Boss parts (torso) | 48x64 | Central piece, widest |
-| Boss parts (legs) | 48x32 | Below torso |
-| Boss (composed) | ~96x128 | Larger than players, imposing |
-| Mini-creatures | 32x32 | Smaller than players, simple |
-| Weapons (held overlay) | 24x24 | Overlaid on character, rotates with aim |
-| Projectiles | 8x8 or 16x16 | Must be visible against backgrounds |
-| Items (ground) | 16x16 | Readable at a glance |
-| Items (UI icon) | 32x32 | Used in HUD/inventory |
+| Player characters | 32x32 | ~14-18px tall. Hair blob, minimal detail. |
+| Boss parts (head) | 24x24 | Must compose with torso/legs |
+| Boss parts (torso) | 24x32 | Central piece, widest |
+| Boss parts (legs) | 24x16 | Below torso |
+| Boss (composed) | ~48x64 | Larger than players, imposing |
+| Mini-creatures | 16x16 | Smaller than players, simple |
+| Weapons (held overlay) | 16x16 | Overlaid on character, rotates with aim |
+| Projectiles | 4x4 or 8x8 | Must be visible against backgrounds |
+| Items (ground) | 8x8 or 16x16 | Readable at a glance |
+| Items (UI icon) | 16x16 or 32x32 | Used in HUD/inventory |
 | Environment tiles | 16x16 | Tileable, top-down perspective |
 | UI elements | Variable | Must match pixel density of game world |
 
-**Critical rule:** Never mix resolutions within an asset type. A 32x32 enemy next to a 64x64 enemy breaks cohesion instantly.
+**Critical rule:** Never mix resolutions within an asset type. A 16x16 enemy next to a 32x32 enemy breaks cohesion instantly.
 
 ---
 
@@ -92,14 +96,14 @@ Derived from the style anchor sprite. All assets must use colors from this palet
 
 ## Character Proportions
 
-**Chibi style:**
-- Head: ~40% of total character height
-- Body (torso + legs): ~60% of total character height
-- Head width ≈ body width (or slightly wider)
-- Arms: short, stubby, reach to about hip level
-- Legs: short, ~25% of total height
-- Eyes: large relative to head, expressive
-- No visible neck — head sits directly on torso
+**Chibi style (at 32x32, character is ~14-18px tall):**
+- Head: large blob, ~40% of character height (~6-7px)
+- Body: simple color block (~5-6px)
+- Legs: pixel stumps (~3-4px)
+- Hair: solid color shape, no individual strands
+- Face: skin-tone area with 2 dark pixels for glasses/eyes
+- Arms: irrelevant at this scale — 1px bumps at most, handled by weapon pivot
+- No visible neck — head sits directly on body
 
 **Boss proportions:**
 - Bosses should be 1.5x-2x the size of player characters
@@ -135,11 +139,12 @@ Derived from the style anchor sprite. All assets must use colors from this palet
 - Item pickup: 8 FPS (satisfying)
 
 **Animation principles:**
-- Squash and stretch where possible at pixel scale
-- Anticipation frame before big actions (wind-up before roll)
-- Hold/linger on impact frames (hit reaction, recoil)
-- Return to idle pose cleanly from any animation
+- At 32x32, "animation" means shifting a few pixels — keep it simple
+- Idle is just a 1-2px vertical bob
+- Run is leg stumps alternating + slight forward lean
+- Dodge roll is the biggest pose change — tuck into ball and pop back up
 - All animation strips are horizontal (frames left to right)
+- Embrace slight frame-to-frame variation as charm, not error
 
 See `docs/art-animation-spec.md` for full animation list, frame counts, and prompt templates.
 
@@ -213,7 +218,8 @@ See `docs/art-animation-spec.md` for full animation list, frame counts, and prom
 - No gore, blood, or violent imagery — enemies "poof" when defeated
 - No inconsistent light sources — always top-left
 - No variable outline thickness — always 1px #2C2C2C
-- No generating assets without referencing the style anchor sprite
+- No generating assets without referencing the style anchor sprite AND the ETG style reference
+- No overcomplicating sprites — if it looks too detailed for Enter the Gungeon, simplify it
 
 ---
 
