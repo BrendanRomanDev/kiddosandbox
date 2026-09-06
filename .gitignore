@@ -5,5 +5,11 @@
 # Nano Banana staging (raw AI output, not QA'd)
 nanobanana-output/
 
+# Godot import artifacts for BMad config CSVs. Godot treated these as game
+# translation resources, which they are not. _bmad/.gdignore stops it from
+# scanning the folder at all, so these should never come back.
+_bmad/**/*.translation
+_bmad/**/*.csv.import
+
 # macOS
 .DS_Store
