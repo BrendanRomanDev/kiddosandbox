@@ -7,11 +7,16 @@ extends CharacterBody2D
 ## rather than swapping sprite frames. That means the placeholder art can be
 ## replaced with anything (silhouette, rigged character, chibi sprite) without
 ## touching this script. Swap what lives under Visual, nothing else changes.
+##
+## Input comes from a PlayerInput bound to one device, so two players on one
+## couch do not drive each other's character.
 
 # --- Movement tuning ---
 const MAX_SPEED := 150.0
 const ACCELERATION := 1100.0
 const FRICTION := 1500.0
+## Ghosts drift rather than run - they are waiting for a revive, not fighting.
+const DOWNED_SPEED_SCALE := 0.65
 
 # --- Dodge tuning ---
 const DODGE_SPEED := 400.0
@@ -20,6 +25,10 @@ const DODGE_COOLDOWN := 3.0
 ## Speed you carry out of a slide, decaying back to MAX_SPEED over the boost window.
 const DODGE_BOOST_SPEED := 210.0
 const DODGE_BOOST_DURATION := 0.35
+
+# --- Damage ---
+const HIT_INVULNERABLE_TIME := 0.9
+const HIT_FLASH_INTERVAL := 0.07
 
 # --- Procedural animation tuning ---
 const IDLE_BOB_SPEED := 3.0
@@ -39,19 +48,47 @@ const DIRECTION_COUNT := 8
 ## Emitted when the snapped 8-way facing changes. Sprite swapping will hang off
 ## this once real directional art exists.
 signal facing_changed(facing: Vector2)
+signal went_down
+signal revived
+
+## Which device drives this player. -1 is keyboard; 0, 1, 2... are joypads in
+## connection order. Set per instance in the scene.
+@export var device := PlayerInput.KEYBOARD
+@export var player_index := 1
+## Tints the placeholder sprite so the two players are told apart at a glance.
+## Goes away once real per-character art exists.
+@export var player_color := Color(0.24, 0.85, 0.72)
 
 @onready var _visual: Node2D = $Visual
+@onready var _health: Health = $Health
+@onready var _weapon: Weapon = $Weapon
 
+var _input_source: PlayerInput
 var _facing := Vector2.DOWN
 var _bob_time := 0.0
 var _dodge_time_left := 0.0
 var _dodge_cooldown_left := 0.0
 var _dodge_direction := Vector2.ZERO
 var _boost_time_left := 0.0
+var _invulnerable_time_left := 0.0
+var _is_down := false
+
+
+func _ready() -> void:
+	add_to_group("players")
+	collision_layer = CollisionLayers.PLAYER
+	collision_mask = CollisionLayers.WORLD
+
+	_input_source = PlayerInput.new(device)
+	_health.died.connect(_on_died)
+	($Visual/Sprite as Sprite2D).modulate = player_color
 
 
 func _physics_process(delta: float) -> void:
+	_input_source.update()
 	_dodge_cooldown_left = maxf(_dodge_cooldown_left - delta, 0.0)
+	_invulnerable_time_left = maxf(_invulnerable_time_left - delta, 0.0)
+	_update_invulnerable_flash()
 
 	var is_dodging := _dodge_time_left > 0.0
 	if is_dodging:
@@ -62,6 +99,7 @@ func _physics_process(delta: float) -> void:
 
 	_boost_time_left = maxf(_boost_time_left - delta, 0.0)
 	_process_movement(delta)
+	_process_shooting()
 	_update_grounded_visual(delta)
 	move_and_slide()
 
@@ -69,10 +107,9 @@ func _physics_process(delta: float) -> void:
 # --- Movement ---
 
 func _process_movement(delta: float) -> void:
-	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var wants_to_dodge := Input.is_action_just_pressed("dodge")
+	var input_direction := _input_source.get_move_vector()
 
-	if wants_to_dodge and is_dodge_ready():
+	if _input_source.wants_dodge() and is_dodge_ready() and not _is_down:
 		_start_dodge(input_direction)
 		return
 
@@ -87,11 +124,21 @@ func _process_movement(delta: float) -> void:
 
 ## Normal top speed, raised briefly after a slide so the dodge launches you.
 func _get_speed_cap() -> float:
-	if _boost_time_left <= 0.0:
-		return MAX_SPEED
+	var cap := MAX_SPEED
+	if _boost_time_left > 0.0:
+		var boost_remaining := _boost_time_left / DODGE_BOOST_DURATION
+		cap = lerpf(MAX_SPEED, DODGE_BOOST_SPEED, boost_remaining)
 
-	var boost_remaining := _boost_time_left / DODGE_BOOST_DURATION
-	return lerpf(MAX_SPEED, DODGE_BOOST_SPEED, boost_remaining)
+	return cap * DOWNED_SPEED_SCALE if _is_down else cap
+
+
+# --- Shooting ---
+
+func _process_shooting() -> void:
+	if _is_down or not _input_source.is_shooting():
+		return
+
+	_weapon.try_fire(_input_source.get_aim_vector(), _facing)
 
 
 # --- Dodge ---
@@ -122,6 +169,54 @@ func _process_dodge(delta: float) -> void:
 
 func _get_dodge_progress() -> float:
 	return 1.0 - (_dodge_time_left / DODGE_DURATION)
+
+
+# --- Damage ---
+
+## Projectiles call this rather than touching Health directly, so i-frames are
+## enforced in one place.
+func try_take_damage(amount: int) -> void:
+	if is_invulnerable():
+		return
+
+	_health.take_damage(amount)
+	_invulnerable_time_left = HIT_INVULNERABLE_TIME
+
+
+func is_invulnerable() -> bool:
+	return is_dodging() or _is_down or _invulnerable_time_left > 0.0
+
+
+func _update_invulnerable_flash() -> void:
+	if _is_down:
+		return
+
+	var is_flashing := _invulnerable_time_left > 0.0
+	if not is_flashing:
+		_visual.modulate.a = 1.0
+		return
+
+	var flash_step := int(_invulnerable_time_left / HIT_FLASH_INTERVAL)
+	_visual.modulate.a = 0.35 if flash_step % 2 == 0 else 1.0
+
+
+func _on_died() -> void:
+	_is_down = true
+	_visual.modulate.a = 0.4
+	went_down.emit()
+
+
+## Called when the fight is won - GDD has downed players revive on boss defeat
+## rather than the run ending.
+func revive(health_amount := 3) -> void:
+	if not _is_down:
+		return
+
+	_is_down = false
+	_visual.modulate.a = 1.0
+	_health.heal(health_amount)
+	_invulnerable_time_left = HIT_INVULNERABLE_TIME
+	revived.emit()
 
 
 # --- Procedural animation ---
@@ -196,6 +291,9 @@ func is_dodge_ready() -> bool:
 	return _dodge_cooldown_left <= 0.0
 
 
-## Hook for i-frames once projectiles exist.
 func is_dodging() -> bool:
 	return _dodge_time_left > 0.0
+
+
+func is_down() -> bool:
+	return _is_down
