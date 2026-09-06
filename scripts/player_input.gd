@@ -8,6 +8,13 @@ extends RefCounted
 ## characters. This reads a specific joypad by id instead, or falls back to the
 ## keyboard action map when the device is KEYBOARD.
 ##
+## IMPORTANT: the action map in project.godot is deliberately keyboard and mouse
+## ONLY. Godot binds joypad events to actions with device -1, meaning "any
+## device", so a single joypad event on an action fires for every player reading
+## that action - P2's stick would drive P1 as well. Adding joypad bindings back
+## to move_*/dodge/shoot silently breaks two-player. All pad reading belongs
+## here, against an explicit device id.
+##
 ## update() must be called once per physics frame before the getters, because
 ## joypad buttons have no built-in "just pressed" edge like actions do.
 
