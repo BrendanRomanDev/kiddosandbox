@@ -1,3 +1,90 @@
-[gd_scene format=3 uid="uid://ceds0ma71t8pn"]
+[gd_scene format=4 uid="uid://ceds0ma71t8pn"]
 
-[node name="Game" type="Node2D"]
+[ext_resource type="Script" uid="uid://b1f4ysdx0uol" path="res://scripts/grid_background.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2"]
+[ext_resource type="Texture2D" uid="uid://chp30x5qveqke" path="res://assets/LabAssetPack/Tilesets/tileset x1.png" id="2_7jktm"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_j5wjh"]
+texture = ExtResource("2_7jktm")
+texture_region_size = Vector2i(32, 32)
+4:0/0 = 0
+5:0/0 = 0
+6:0/0 = 0
+7:0/0 = 0
+8:0/0 = 0
+4:1/0 = 0
+6:1/0 = 0
+7:1/0 = 0
+9:1/0 = 0
+12:1/0 = 0
+13:1/0 = 0
+14:1/0 = 0
+4:2/0 = 0
+6:2/0 = 0
+9:2/0 = 0
+9:3/0 = 0
+12:3/0 = 0
+13:3/0 = 0
+9:4/0 = 0
+9:5/0 = 0
+12:5/0 = 0
+13:5/0 = 0
+2:10/0 = 0
+3:10/0 = 0
+3:0/0 = 0
+2:0/0 = 0
+1:1/0 = 0
+0:5/0 = 0
+1:5/0 = 0
+1:6/0 = 0
+0:7/0 = 0
+1:7/0 = 0
+1:8/0 = 0
+1:9/0 = 0
+4:10/0 = 0
+5:10/0 = 0
+4:9/0 = 0
+4:8/0 = 0
+6:8/0 = 0
+6:9/0 = 0
+10:5/0 = 0
+9:6/0 = 0
+9:7/0 = 0
+10:7/0 = 0
+9:8/0 = 0
+9:9/0 = 0
+8:10/0 = 0
+7:9/0 = 0
+7:10/0 = 0
+6:10/0 = 0
+12:6/0 = 0
+12:7/0 = 0
+13:7/0 = 0
+14:7/0 = 0
+1:2/0 = 0
+1:3/0 = 0
+1:4/0 = 0
+14:5/0 = 0
+14:3/0 = 0
+14:2/0 = 0
+32:2/0 = 0
+8:1/0 = 0
+34:1/0 = 0
+33:1/0 = 0
+32:1/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_hlyux"]
+tile_size = Vector2i(32, 32)
+sources/1 = SubResource("TileSetAtlasSource_j5wjh")
+
+[node name="Game" type="Node2D" unique_id=1877504773]
+
+[node name="GridBackground" type="Node2D" parent="." unique_id=1799745528]
+script = ExtResource("1")
+
+[node name="TileMapLayer" type="TileMapLayer" parent="GridBackground" unique_id=1416127057]
+tile_map_data = PackedByteArray("AAD/////AQAiAAEAAAD///7/AQAiAAEAAAAAAP7/AQAiAAEAAAAAAP//AQAiAAEAAAAAAAAAAQAiAAEAAAAAAAEAAQAiAAEAAAABAP7/AQAiAAEAAAABAP//AQAiAAEAAAABAAAAAQAiAAEAAAACAP7/AQAiAAEAAAACAP//AQAiAAEAAAACAAAAAQAiAAEAAAADAP7/AQAiAAEAAAADAP//AQAiAAEAAAADAAAAAQAiAAEAAAADAAEAAQAiAAEAAAAEAP//AQAiAAEAAAAEAAAAAQAiAAEAAAAEAAEAAQAiAAEAAAD+/wAAAQAiAAEAAAD//wAAAQAiAAEAAAD//wEAAQAiAAEAAAD9/wMAAQAiAAEAAAD9/wQAAQAiAAEAAAD+/wMAAQAiAAEAAAD+/wQAAQAiAAEAAAD//wIAAQAgAAIAAAD//wMAAQAiAAEAAAD//wQAAQAiAAEAAAAAAAIAAQAiAAEAAAABAAQAAQAiAAEAAAACAAMAAQAiAAEAAAACAAQAAQAiAAEAAAADAAIAAQAiAAEAAAADAAMAAQAiAAEAAAADAAQAAQAiAAEAAAAEAAIAAQAiAAEAAAAEAAMAAQAiAAEAAAAEAAQAAQAiAAEAAAD6//7/AQAiAAEAAAD6////AQAiAAEAAAD6/wAAAQAiAAEAAAD6/wEAAQAiAAEAAAD7//7/AQAiAAEAAAD7////AQAiAAEAAAD7/wAAAQAiAAEAAAD7/wEAAQAiAAEAAAD8//7/AQAiAAEAAAD8////AQAiAAEAAAD6/wIAAQAiAAEAAAD6/wMAAQAiAAEAAAD6/wQAAQAiAAEAAAD7/wIAAQAiAAEAAAD7/wMAAQAiAAEAAAD7/wQAAQAiAAEAAAD8/wMAAQAiAAEAAAD8/wQAAQAiAAEAAAD7//3/AQAiAAEAAAD8//3/AQAiAAEAAAD9//3/AQAiAAEAAAD+//3/AQAiAAEAAAD///3/AQAiAAEAAAAAAP3/AQAiAAEAAAABAP3/AQAiAAEAAAACAP3/AQAiAAEAAAD9////AQAiAAEAAAD9//7/AQAiAAEAAAD+////AQAiAAEAAAD+//7/AQAiAAEAAAD+/wIAAQAgAAEAAAD+/wEAAQAiAAEAAAD9/wAAAQAiAAEAAAD6//3/AQAiAAEAAAAEAP7/AQAiAAEAAAAEAP3/AQAiAAEAAAADAP3/AQAiAAEAAAAAAAMAAQAiAAEAAAAAAAQAAQAiAAEAAAACAAEAAQAiAAEAAAACAAIAAQAiAAEAAAABAAIAAQAiAAEAAAABAAMAAQAiAAEAAAABAAEAAQAiAAEAAAD8/wAAAQAiAAEAAAD8/wEAAQAiAAEAAAD9/wEAAQAiAAEAAAD9/wIAAQAgAAIAAAD8/wIAAQAiAAEAAAA=")
+tile_set = SubResource("TileSet_hlyux")
+rendering_quadrant_size = 32
+
+[node name="Player" parent="." unique_id=8283131 instance=ExtResource("2")]

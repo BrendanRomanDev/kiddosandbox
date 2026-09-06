@@ -1,0 +1,163 @@
+class_name Player
+extends CharacterBody2D
+
+## Top-down 8-direction player controller.
+##
+## All animation here is procedural - it drives the transform of the Visual node
+## rather than swapping sprite frames. That means the placeholder art can be
+## replaced with anything (silhouette, rigged character, chibi sprite) without
+## touching this script. Swap what lives under Visual, nothing else changes.
+
+# --- Movement tuning ---
+const MAX_SPEED := 150.0
+const ACCELERATION := 1100.0
+const FRICTION := 1500.0
+
+# --- Dodge tuning ---
+const DODGE_SPEED := 400.0
+const DODGE_DURATION := 0.30
+const DODGE_COOLDOWN := 0.45
+
+# --- Procedural animation tuning ---
+const IDLE_BOB_SPEED := 3.0
+const IDLE_BOB_AMOUNT := 0.035
+const RUN_BOB_SPEED := 14.0
+const RUN_BOB_AMOUNT := 0.11
+const RUN_HOP_HEIGHT := 1.5
+const DODGE_SQUASH_AMOUNT := 0.38
+const SETTLE_SPEED := 18.0
+
+# --- Facing ---
+const DIRECTION_COUNT := 8
+
+## Emitted when the snapped 8-way facing changes. Sprite swapping will hang off
+## this once real directional art exists.
+signal facing_changed(facing: Vector2)
+
+@onready var _visual: Node2D = $Visual
+
+var _facing := Vector2.DOWN
+var _bob_time := 0.0
+var _dodge_time_left := 0.0
+var _dodge_cooldown_left := 0.0
+var _dodge_direction := Vector2.ZERO
+
+
+func _physics_process(delta: float) -> void:
+	_dodge_cooldown_left = maxf(_dodge_cooldown_left - delta, 0.0)
+
+	var is_dodging := _dodge_time_left > 0.0
+	if is_dodging:
+		_process_dodge(delta)
+		_update_dodge_visual()
+		move_and_slide()
+		return
+
+	_process_movement(delta)
+	_update_grounded_visual(delta)
+	move_and_slide()
+
+
+# --- Movement ---
+
+func _process_movement(delta: float) -> void:
+	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var wants_to_dodge := Input.is_action_just_pressed("dodge")
+	var can_dodge := _dodge_cooldown_left <= 0.0
+
+	if wants_to_dodge and can_dodge:
+		_start_dodge(input_direction)
+		return
+
+	var is_moving := not input_direction.is_zero_approx()
+	if is_moving:
+		_set_facing(_snap_to_eight(input_direction))
+		velocity = velocity.move_toward(input_direction * MAX_SPEED, ACCELERATION * delta)
+		return
+
+	velocity = velocity.move_toward(Vector2.ZERO, FRICTION * delta)
+
+
+# --- Dodge ---
+
+func _start_dodge(input_direction: Vector2) -> void:
+	# Dodging with no stick input rolls the way you are already facing.
+	_dodge_direction = input_direction.normalized() if not input_direction.is_zero_approx() else _facing
+	_set_facing(_snap_to_eight(_dodge_direction))
+	_dodge_time_left = DODGE_DURATION
+	_dodge_cooldown_left = DODGE_DURATION + DODGE_COOLDOWN
+	velocity = _dodge_direction * DODGE_SPEED
+
+
+func _process_dodge(delta: float) -> void:
+	_dodge_time_left = maxf(_dodge_time_left - delta, 0.0)
+
+	var is_dodge_finished := _dodge_time_left <= 0.0
+	if is_dodge_finished:
+		_visual.rotation = 0.0
+		velocity = _dodge_direction * MAX_SPEED
+		return
+
+	# Ease out of the burst so the dodge lands rather than stopping dead.
+	var progress := _get_dodge_progress()
+	velocity = _dodge_direction * lerpf(DODGE_SPEED, MAX_SPEED, progress)
+
+
+func _get_dodge_progress() -> float:
+	return 1.0 - (_dodge_time_left / DODGE_DURATION)
+
+
+# --- Procedural animation ---
+
+func _update_dodge_visual() -> void:
+	var progress := _get_dodge_progress()
+
+	# sin() gives a 0 -> 1 -> 0 curve, so the squash peaks mid-roll and settles.
+	var squash := sin(progress * PI)
+	_visual.scale = Vector2(
+		1.0 + squash * DODGE_SQUASH_AMOUNT,
+		1.0 - squash * DODGE_SQUASH_AMOUNT
+	)
+	_visual.position.y = -squash * RUN_HOP_HEIGHT * 2.0
+	_visual.rotation = TAU * progress
+
+
+func _update_grounded_visual(delta: float) -> void:
+	var is_moving := velocity.length() > 1.0
+	var bob_speed := RUN_BOB_SPEED if is_moving else IDLE_BOB_SPEED
+	var bob_amount := RUN_BOB_AMOUNT if is_moving else IDLE_BOB_AMOUNT
+
+	_bob_time += delta * bob_speed
+	var bob := sin(_bob_time)
+
+	# Squash and stretch are inverse - the character keeps its volume.
+	var target_scale := Vector2(1.0 - bob * bob_amount, 1.0 + bob * bob_amount)
+	var target_hop := -absf(bob) * RUN_HOP_HEIGHT if is_moving else 0.0
+
+	_visual.scale = _visual.scale.lerp(target_scale, SETTLE_SPEED * delta)
+	_visual.position.y = lerpf(_visual.position.y, target_hop, SETTLE_SPEED * delta)
+	_visual.rotation = lerpf(_visual.rotation, 0.0, SETTLE_SPEED * delta)
+
+
+# --- Facing ---
+
+func _set_facing(new_facing: Vector2) -> void:
+	if new_facing.is_equal_approx(_facing):
+		return
+
+	_facing = new_facing
+	facing_changed.emit(_facing)
+
+
+## Snaps an analog stick vector to one of 8 compass directions. Movement itself
+## stays fully analog - this is only the facing used for art selection.
+func _snap_to_eight(direction: Vector2) -> Vector2:
+	if direction.is_zero_approx():
+		return _facing
+
+	var step := TAU / DIRECTION_COUNT
+	return Vector2.RIGHT.rotated(snappedf(direction.angle(), step))
+
+
+func get_facing() -> Vector2:
+	return _facing
