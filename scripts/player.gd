@@ -16,7 +16,10 @@ const FRICTION := 1500.0
 # --- Dodge tuning ---
 const DODGE_SPEED := 400.0
 const DODGE_DURATION := 0.30
-const DODGE_COOLDOWN := 0.45
+const DODGE_COOLDOWN := 3.0
+## Speed you carry out of a slide, decaying back to MAX_SPEED over the boost window.
+const DODGE_BOOST_SPEED := 210.0
+const DODGE_BOOST_DURATION := 0.35
 
 # --- Procedural animation tuning ---
 const IDLE_BOB_SPEED := 3.0
@@ -24,7 +27,10 @@ const IDLE_BOB_AMOUNT := 0.035
 const RUN_BOB_SPEED := 14.0
 const RUN_BOB_AMOUNT := 0.11
 const RUN_HOP_HEIGHT := 1.5
-const DODGE_SQUASH_AMOUNT := 0.38
+## Stretch along the direction of travel during a slide.
+const DODGE_SMEAR_AMOUNT := 0.34
+## Uniform flatten during a slide, so diagonals still read as a dodge.
+const DODGE_CROUCH_AMOUNT := 0.14
 const SETTLE_SPEED := 18.0
 
 # --- Facing ---
@@ -41,6 +47,7 @@ var _bob_time := 0.0
 var _dodge_time_left := 0.0
 var _dodge_cooldown_left := 0.0
 var _dodge_direction := Vector2.ZERO
+var _boost_time_left := 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -53,6 +60,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	_boost_time_left = maxf(_boost_time_left - delta, 0.0)
 	_process_movement(delta)
 	_update_grounded_visual(delta)
 	move_and_slide()
@@ -63,29 +71,37 @@ func _physics_process(delta: float) -> void:
 func _process_movement(delta: float) -> void:
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var wants_to_dodge := Input.is_action_just_pressed("dodge")
-	var can_dodge := _dodge_cooldown_left <= 0.0
 
-	if wants_to_dodge and can_dodge:
+	if wants_to_dodge and is_dodge_ready():
 		_start_dodge(input_direction)
 		return
 
 	var is_moving := not input_direction.is_zero_approx()
 	if is_moving:
 		_set_facing(_snap_to_eight(input_direction))
-		velocity = velocity.move_toward(input_direction * MAX_SPEED, ACCELERATION * delta)
+		velocity = velocity.move_toward(input_direction * _get_speed_cap(), ACCELERATION * delta)
 		return
 
 	velocity = velocity.move_toward(Vector2.ZERO, FRICTION * delta)
 
 
+## Normal top speed, raised briefly after a slide so the dodge launches you.
+func _get_speed_cap() -> float:
+	if _boost_time_left <= 0.0:
+		return MAX_SPEED
+
+	var boost_remaining := _boost_time_left / DODGE_BOOST_DURATION
+	return lerpf(MAX_SPEED, DODGE_BOOST_SPEED, boost_remaining)
+
+
 # --- Dodge ---
 
 func _start_dodge(input_direction: Vector2) -> void:
-	# Dodging with no stick input rolls the way you are already facing.
+	# Dodging with no stick input slides the way you are already facing.
 	_dodge_direction = input_direction.normalized() if not input_direction.is_zero_approx() else _facing
 	_set_facing(_snap_to_eight(_dodge_direction))
 	_dodge_time_left = DODGE_DURATION
-	_dodge_cooldown_left = DODGE_DURATION + DODGE_COOLDOWN
+	_dodge_cooldown_left = DODGE_COOLDOWN
 	velocity = _dodge_direction * DODGE_SPEED
 
 
@@ -94,13 +110,14 @@ func _process_dodge(delta: float) -> void:
 
 	var is_dodge_finished := _dodge_time_left <= 0.0
 	if is_dodge_finished:
-		_visual.rotation = 0.0
-		velocity = _dodge_direction * MAX_SPEED
+		_boost_time_left = DODGE_BOOST_DURATION
+		velocity = _dodge_direction * DODGE_BOOST_SPEED
 		return
 
-	# Ease out of the burst so the dodge lands rather than stopping dead.
+	# Ease out of the burst so the slide settles into the boost rather than
+	# stopping dead.
 	var progress := _get_dodge_progress()
-	velocity = _dodge_direction * lerpf(DODGE_SPEED, MAX_SPEED, progress)
+	velocity = _dodge_direction * lerpf(DODGE_SPEED, DODGE_BOOST_SPEED, progress)
 
 
 func _get_dodge_progress() -> float:
@@ -110,16 +127,21 @@ func _get_dodge_progress() -> float:
 # --- Procedural animation ---
 
 func _update_dodge_visual() -> void:
-	var progress := _get_dodge_progress()
+	# sin() gives a 0 -> 1 -> 0 curve, so the smear peaks mid-slide and settles.
+	var smear := sin(_get_dodge_progress() * PI)
 
-	# sin() gives a 0 -> 1 -> 0 curve, so the squash peaks mid-roll and settles.
-	var squash := sin(progress * PI)
+	# Stretch along the direction of travel and compress across it. No rotation,
+	# so a slide reads the same whichever of the 8 directions you take. Cardinals
+	# get the full smear; diagonals cancel out to the crouch alone.
+	var travel_axis := absf(_dodge_direction.x) - absf(_dodge_direction.y)
+	var crouch := 1.0 - smear * DODGE_CROUCH_AMOUNT
+
 	_visual.scale = Vector2(
-		1.0 + squash * DODGE_SQUASH_AMOUNT,
-		1.0 - squash * DODGE_SQUASH_AMOUNT
-	)
-	_visual.position.y = -squash * RUN_HOP_HEIGHT * 2.0
-	_visual.rotation = TAU * progress
+		1.0 + smear * DODGE_SMEAR_AMOUNT * travel_axis,
+		1.0 - smear * DODGE_SMEAR_AMOUNT * travel_axis
+	) * crouch
+	_visual.position.y = 0.0
+	_visual.rotation = 0.0
 
 
 func _update_grounded_visual(delta: float) -> void:
@@ -136,7 +158,6 @@ func _update_grounded_visual(delta: float) -> void:
 
 	_visual.scale = _visual.scale.lerp(target_scale, SETTLE_SPEED * delta)
 	_visual.position.y = lerpf(_visual.position.y, target_hop, SETTLE_SPEED * delta)
-	_visual.rotation = lerpf(_visual.rotation, 0.0, SETTLE_SPEED * delta)
 
 
 # --- Facing ---
@@ -159,5 +180,22 @@ func _snap_to_eight(direction: Vector2) -> Vector2:
 	return Vector2.RIGHT.rotated(snappedf(direction.angle(), step))
 
 
+# --- Public state ---
+
 func get_facing() -> Vector2:
 	return _facing
+
+
+## 0.0 the instant a dodge is spent, 1.0 once it is ready again. Drives the
+## cooldown indicator.
+func get_dodge_cooldown_ratio() -> float:
+	return 1.0 - (_dodge_cooldown_left / DODGE_COOLDOWN)
+
+
+func is_dodge_ready() -> bool:
+	return _dodge_cooldown_left <= 0.0
+
+
+## Hook for i-frames once projectiles exist.
+func is_dodging() -> bool:
+	return _dodge_time_left > 0.0
